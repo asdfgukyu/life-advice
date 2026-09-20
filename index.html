@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Life is GORG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #f0ebe0;
+    --red: #c4262b;
+  }
+  * { box-sizing: border-box; }
+  html { height: 100%; background: var(--bg); }
+  body {
+    margin: 0; min-height: 100%;
+    background: var(--bg); color: var(--red);
+    font-family: "Manrope", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;
+  }
+  .wrap {
+    width: 100%; max-width: 480px; margin: 0 auto;
+    min-height: 100vh; min-height: 100dvh;
+    display: flex; flex-direction: column;
+    padding: 12px 10px 14px;
+  }
+  .text { opacity: 0; transition: opacity .8s ease; }
+  .text.in { opacity: 1; }
+  .label {
+    font-size: 9px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
+    opacity: .75; margin-bottom: 6px;
+    text-align: justify; text-align-last: justify;
+  }
+  .answer {
+    font-size: 12px; line-height: 1.32; font-weight: 500;
+    text-align: justify; text-align-last: justify;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .answer.short, .label.short { text-align: left; text-align-last: left; }
+  .name {
+    font-size: 10px; font-weight: 600; letter-spacing: .04em;
+    text-align: right; margin-top: 8px;
+  }
+  .stage { position: relative; flex: 1; min-height: 420px; margin-top: 18px; }
+  .stage img {
+    position: absolute; display: block; max-width: none;
+    opacity: 0; transition: opacity .9s ease;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+  }
+  .stage img.in { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="text" id="text">
+      <div class="label" id="label"></div>
+      <div class="answer" id="answer"></div>
+      <div class="name" id="name"></div>
+    </div>
+    <div class="stage" id="stage"></div>
+  </div>
+
+<script>
+  // ------------------------------------------------------------
+  // SETTINGS
+  // ------------------------------------------------------------
+
+  // Where the responses are read from. Either a file next to this page ("data.csv")
+  // or the "Publish to web -> CSV" link of your Google Sheet.
+  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfh8oVWKusnlp0DjNZRK5ED7WTcfAG6AFbIx51ziPn6WX8zsRJXyje4ncFLgOJrWoftBo8Iek9m8ki/pub?output=csv";
+
+  // Images: just drop image files into this folder in your repo, nothing to list.
+  // The page asks GitHub which files are in the folder (works for public repos).
+  const IMAGE_FOLDER = "images";
+
+  // Your repo as "username/reponame". Leave empty to auto-detect when the site lives at
+  // username.github.io/reponame. Fill it in if you use a custom domain.
+  const GITHUB_REPO = "";
+
+  // Backup list of file names. Used when running locally (VS Code) or if GitHub can't be reached.
+  const IMAGE_FILES = [
+    "apple.webp",
+    "bird.webp",
+    "blueflower.webp",
+    "bowl.webp",
+    "cat.webp",
+    "embossedflower.webp",
+    "flowers.webp",
+    "green_swirl.webp",
+    "horse.webp",
+    "iris.webp",
+    "leaf.webp",
+    "lilypad.webp",
+    "moonwoman.webp",
+    "orchid.webp",
+    "paper_stars.webp",
+    "pearl_plate.webp",
+    "shell.webp",
+    "shell_white.webp",
+    "walll_star.webp",
+    "world_swirl.webp"
+  ];
+
+  // How many images appear each time (picked at random between these two numbers).
+  const MIN_IMAGES = 4, MAX_IMAGES = 5;
+
+  // CSV layout: column 1 = timestamp, column 2 = name, every column after that = a question.
+  const NAME_COLUMN = 1, FIRST_QUESTION_COLUMN = 2;
+
+  // ------------------------------------------------------------
+
+  // Minimal CSV parser (handles quotes, commas and line breaks inside cells)
+  function parseCSV(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows = [];
+    let row = [], cell = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { cell += '"'; i++; }
+          else inQuotes = false;
+        } else cell += ch;
+      } else if (ch === '"') inQuotes = true;
+      else if (ch === ",") { row.push(cell); cell = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); cell = "";
+        rows.push(row); row = [];
+      } else cell += ch;
+    }
+    if (cell.length || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(r => r.some(c => c.trim() !== ""));
+  }
+
+  // Drop leading emoji from column titles so the page stays red-and-cream
+  const cleanTitle = t => t.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, "").trim();
+
+  let QUESTIONS = [], RESPONSES = [], pool = [];
+
+  async function loadData() {
+    const res = await fetch(CSV_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const rows = parseCSV(await res.text());
+    if (rows.length < 2) throw new Error("no rows");
+    const header = rows[0];
+    QUESTIONS = header.slice(FIRST_QUESTION_COLUMN).map(cleanTitle);
+    RESPONSES = rows.slice(1).map(r => ({
+      name: (r[NAME_COLUMN] || "").trim(),
+      answers: QUESTIONS.map((_, i) => (r[FIRST_QUESTION_COLUMN + i] || "").trim())
+    }));
+    pool = [];
+    RESPONSES.forEach((r, ri) => r.answers.forEach((a, qi) => { if (a) pool.push({ ri, qi }); }));
+  }
+
+  // Shuffled order: every response appears once (in random order) before any repeats.
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function pick() {
+    const ids = pool.map(p => `${p.ri}-${p.qi}`);
+    let queue = [];
+    try {
+      queue = JSON.parse(localStorage.getItem("queue") || "[]").filter(id => ids.includes(id));
+    } catch (e) {}
+    if (!queue.length) {
+      let last = null;
+      try { last = localStorage.getItem("last"); } catch (e) {}
+      queue = shuffle(ids.slice());
+      if (queue.length > 1 && queue[0] === last) queue.push(queue.shift());
+    }
+    const id = queue.shift();
+    try {
+      localStorage.setItem("queue", JSON.stringify(queue));
+      localStorage.setItem("last", id);
+    } catch (e) {}
+    const [ri, qi] = id.split("-").map(Number);
+    return { ri, qi };
+  }
+
+  function show() {
+    const c = pick();
+    const text = RESPONSES[c.ri].answers[c.qi];
+    document.getElementById("label").textContent = QUESTIONS[c.qi];
+    document.getElementById("answer").textContent = text;
+    document.getElementById("name").textContent = RESPONSES[c.ri].name;
+    // very short answers would look silly stretched edge to edge
+    document.getElementById("answer").classList.toggle("short", text.split(/\s+/).length < 8);
+    document.getElementById("label").classList.toggle("short", QUESTIONS[c.qi].split(/\s+/).length < 6);
+    document.getElementById("text").classList.add("in");
+  }
+
+  // ---------- Images, scattered below the text ----------
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  function repoFromUrl() {
+    if (GITHUB_REPO) return GITHUB_REPO;
+    const host = location.hostname;
+    if (!host.endsWith(".github.io")) return "";
+    const owner = host.split(".")[0];
+    const first = location.pathname.split("/")[1];
+    return owner + "/" + (first || host);
+  }
+
+  // Get the list of image files in the folder (cached for 10 minutes so we stay well
+  // under GitHub's rate limit)
+  async function getImageFiles() {
+    const isImg = n => /\.(png|webp|jpe?g|gif|svg|avif)$/i.test(n);
+    const repo = repoFromUrl();
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem("imgList") || "null"); } catch (e) {}
+    if (cached && Date.now() - cached.t < 10 * 60 * 1000 && cached.repo === repo && cached.list.length) return cached.list;
+    if (repo) {
+      try {
+        const res = await fetch(`https://api.github.com/repos/${repo}/contents/${IMAGE_FOLDER}`);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const list = (await res.json()).filter(f => f.type === "file" && isImg(f.name)).map(f => f.name);
+        if (list.length) {
+          try { localStorage.setItem("imgList", JSON.stringify({ t: Date.now(), repo, list })); } catch (e) {}
+          return list;
+        }
+      } catch (e) {}
+    }
+    if (cached && cached.list.length) return cached.list;   // stale is better than nothing
+    return IMAGE_FILES;
+  }
+
+  function loadImage(file) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.alt = ""; img.draggable = false;
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = IMAGE_FOLDER + "/" + encodeURIComponent(file);
+    });
+  }
+
+  async function layout() {
+    const stage = document.getElementById("stage");
+    const count = MIN_IMAGES + Math.floor(Math.random() * (MAX_IMAGES - MIN_IMAGES + 1));
+    const files = await getImageFiles();
+    const loaded = (await Promise.all(shuffle(files.slice()).slice(0, count).map(loadImage))).filter(Boolean);
+
+    const W = stage.clientWidth, H = stage.clientHeight;
+    const base = Math.min(Math.max(W * 0.24, 70), 150);
+    const placed = [], gap = 8;
+
+    loaded.forEach(img => {
+      const nw = img.naturalWidth, nh = img.naturalHeight;
+      let scale = 1, spot = null;
+      for (let round = 0; round < 6 && !spot; round++) {
+        const k = (base * rand(0.75, 1.45) * scale) / Math.max(nw, nh);
+        const w = nw * k, h = nh * k;
+        if (w > W || h > H) { scale *= 0.85; continue; }
+        for (let i = 0; i < 120; i++) {
+          const x = rand(0, W - w), y = rand(0, H - h);
+          const r = { l: x - gap, t: y - gap, r: x + w + gap, b: y + h + gap };
+          if (!placed.some(p => r.l < p.r && r.r > p.l && r.t < p.b && r.b > p.t)) {
+            spot = { x, y, w, h };
+            break;
+          }
+        }
+        scale *= 0.85;
+      }
+      if (!spot) return;
+      placed.push({ l: spot.x, t: spot.y, r: spot.x + spot.w, b: spot.y + spot.h });
+      img.style.width = spot.w + "px"; img.style.height = spot.h + "px";
+      img.style.left = spot.x + "px"; img.style.top = spot.y + "px";
+      stage.appendChild(img);
+      requestAnimationFrame(() => requestAnimationFrame(() => img.classList.add("in")));
+    });
+  }
+
+  async function main() {
+    try {
+      await loadData();
+      if (!pool.length) throw new Error("no answers");
+    } catch (e) {
+      document.getElementById("answer").textContent =
+        "Couldn't load the responses (" + CSV_URL + "). If you opened this file straight from your computer, " +
+        "put it on a web server or GitHub Pages instead.";
+      document.getElementById("text").classList.add("in");
+      return;
+    }
+    show();
+    requestAnimationFrame(() => requestAnimationFrame(layout));
+  }
+  main();
+</script>
+</body>
+</html>
