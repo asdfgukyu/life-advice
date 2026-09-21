@@ -164,21 +164,24 @@
     return arr;
   }
 
+  // Picks a random response that hasn't been shown yet in this round. Once every response
+  // has been shown, a new round starts. New rows in the sheet join the current round straight away.
   function pick() {
     const ids = pool.map(p => `${p.ri}-${p.qi}`);
-    let queue = [];
+    let shown = [], last = null;
     try {
-      queue = JSON.parse(localStorage.getItem("queue") || "[]").filter(id => ids.includes(id));
+      shown = JSON.parse(localStorage.getItem("shown") || "[]").filter(id => ids.includes(id));
+      last = localStorage.getItem("last");
     } catch (e) {}
-    if (!queue.length) {
-      let last = null;
-      try { last = localStorage.getItem("last"); } catch (e) {}
-      queue = shuffle(ids.slice());
-      if (queue.length > 1 && queue[0] === last) queue.push(queue.shift());
+    let remaining = ids.filter(id => !shown.includes(id));
+    if (!remaining.length) {
+      shown = [];
+      remaining = ids.filter(id => ids.length < 2 || id !== last);
     }
-    const id = queue.shift();
+    const id = remaining[Math.floor(Math.random() * remaining.length)];
+    shown.push(id);
     try {
-      localStorage.setItem("queue", JSON.stringify(queue));
+      localStorage.setItem("shown", JSON.stringify(shown));
       localStorage.setItem("last", id);
     } catch (e) {}
     const [ri, qi] = id.split("-").map(Number);
