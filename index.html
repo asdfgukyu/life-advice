@@ -71,19 +71,13 @@
   // SETTINGS
   // ------------------------------------------------------------
 
-  // Where the responses are read from. Either a file next to this page ("data.csv")
-  // or the "Publish to web -> CSV" link of your Google Sheet.
+  // Read in data from google sheet directly
   const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfh8oVWKusnlp0DjNZRK5ED7WTcfAG6AFbIx51ziPn6WX8zsRJXyje4ncFLgOJrWoftBo8Iek9m8ki/pub?output=csv";
 
-  // Images: just drop image files into this folder in your repo, nothing to list.
-  // The page asks GitHub which files are in the folder (works for public repos).
+  // Images: just drop image files into this folder in your repo
   const IMAGE_FOLDER = "images";
 
-  // Your repo as "username/reponame". Leave empty to auto-detect when the site lives at
-  // username.github.io/reponame. Fill it in if you use a custom domain.
-  const GITHUB_REPO = "";
-
-  // Backup list of file names. Used when running locally (VS Code) or if GitHub can't be reached.
+  // Backup list of file names. Used when running locally or if GitHub can't be reached.
   const IMAGE_FILES = [
     "apple.webp",
     "bird.webp",
@@ -139,7 +133,7 @@
     return rows.filter(r => r.some(c => c.trim() !== ""));
   }
 
-  // Drop leading emoji from column titles so the page stays red-and-cream
+  // Drop leading emoji from column titles
   const cleanTitle = t => t.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, "").trim();
 
   let QUESTIONS = [], RESPONSES = [], pool = [];
@@ -213,7 +207,7 @@
     return owner + "/" + (first || host);
   }
 
-  // Get the list of image files in the folder (cached for 10 minutes so we stay well
+  // Get  list of image files in the folder (cached for 10 minutes so we stay well
   // under GitHub's rate limit)
   async function getImageFiles() {
     const isImg = n => /\.(png|webp|jpe?g|gif|svg|avif)$/i.test(n);
