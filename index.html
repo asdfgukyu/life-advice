@@ -182,7 +182,7 @@
     const [ri, qi] = id.split("-").map(Number);
     return { ri, qi };
   }
-
+ 
   function show() {
     const c = pick();
     const text = RESPONSES[c.ri].answers[c.qi];
@@ -194,10 +194,10 @@
     document.getElementById("label").classList.toggle("short", QUESTIONS[c.qi].split(/\s+/).length < 6);
     document.getElementById("text").classList.add("in");
   }
-
+ 
   // ---------- Images, scattered below the text ----------
   const rand = (a, b) => a + Math.random() * (b - a);
-
+ 
   function repoFromUrl() {
     if (GITHUB_REPO) return GITHUB_REPO;
     const host = location.hostname;
@@ -206,8 +206,8 @@
     const first = location.pathname.split("/")[1];
     return owner + "/" + (first || host);
   }
-
-  // Get  list of image files in the folder (cached for 10 minutes so we stay well
+ 
+  // Get the list of image files in the folder (cached for 10 minutes so we stay well
   // under GitHub's rate limit)
   async function getImageFiles() {
     const isImg = n => /\.(png|webp|jpe?g|gif|svg|avif)$/i.test(n);
@@ -229,7 +229,7 @@
     if (cached && cached.list.length) return cached.list;   // stale is better than nothing
     return IMAGE_FILES;
   }
-
+ 
   function loadImage(file) {
     return new Promise(resolve => {
       const img = new Image();
@@ -239,17 +239,17 @@
       img.src = IMAGE_FOLDER + "/" + encodeURIComponent(file);
     });
   }
-
+ 
   async function layout() {
     const stage = document.getElementById("stage");
     const count = MIN_IMAGES + Math.floor(Math.random() * (MAX_IMAGES - MIN_IMAGES + 1));
     const files = await getImageFiles();
     const loaded = (await Promise.all(shuffle(files.slice()).slice(0, count).map(loadImage))).filter(Boolean);
-
+ 
     const W = stage.clientWidth, H = stage.clientHeight;
     const base = Math.min(Math.max(W * 0.24, 70), 150);
     const placed = [], gap = 8;
-
+ 
     loaded.forEach(img => {
       const nw = img.naturalWidth, nh = img.naturalHeight;
       let scale = 1, spot = null;
@@ -275,7 +275,7 @@
       requestAnimationFrame(() => requestAnimationFrame(() => img.classList.add("in")));
     });
   }
-
+ 
   async function main() {
     try {
       await loadData();
